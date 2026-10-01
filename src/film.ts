@@ -1,21 +1,13 @@
-export const FILM = {
-  width: 1920,
-  height: 1080,
-  duration: 9,
-  fps: 30,
-  chapters: [
-    { start: 0, end: 2.7, title: "Meet Anthony", subtitle: "A different kind of leader", sample: 1.8 },
-    { start: 2.7, end: 5.7, title: "Build what's next", subtitle: "Vision becomes impact", sample: 4.5 },
-    { start: 5.7, end: 9, title: "In a league of his own", subtitle: "The world's best tech leader", sample: 8 },
-  ],
-};
+import { chapterAt, FILM } from "./timeline";
+import type { Chapter, SceneBackground, SceneId } from "./timeline";
 
-const INK = "#111610";
-const LIME = "#d1ff75";
-const PAPER = "#f2f1e7";
-const MONO = '"DM Sans", sans-serif';
+const INK = "#111827";
+const ACCENT = "#7C87FF";
+const PAPER = "#f0f2ff";
+const BODY = '"DM Sans", sans-serif';
 const DISPLAY = '"Space Grotesk", sans-serif';
 const TAU = Math.PI * 2;
+const BACKGROUNDS = { dark: INK, accent: ACCENT, paper: PAPER } satisfies Record<SceneBackground, string>;
 
 export const clamp = (value: number, min = 0, max = 1) => Math.max(min, Math.min(max, value));
 const ease = (value: number) => 1 - Math.pow(1 - clamp(value), 4);
@@ -62,308 +54,574 @@ function line(ctx: CanvasRenderingContext2D, from: [number, number], to: [number
   ctx.stroke();
 }
 
-function star(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+type GraphicOptions = { x: number; y: number; size: number; color?: string };
+
+function mark(ctx: CanvasRenderingContext2D, options: GraphicOptions) {
   ctx.save();
-  ctx.translate(x, y);
-  ctx.beginPath();
-  for (let i = 0; i < 16; i++) {
-    const angle = (i / 16) * TAU;
-    const radius = i % 2 ? size * 0.22 : size;
-    ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
-  }
-  ctx.closePath();
-  ctx.fill();
+  ctx.translate(options.x, options.y);
+  ctx.rotate(-22 * Math.PI / 180);
+  ctx.scale(options.size / 26, options.size / 26);
+  ctx.fillStyle = options.color ?? ACCENT;
+  ctx.fillRect(-12, -8.5, 6, 17);
+  ctx.fillRect(-3, -13.5, 6, 27);
+  ctx.fillRect(6, -8.5, 6, 17);
   ctx.restore();
 }
 
-function arrow(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+function arrow(ctx: CanvasRenderingContext2D, options: GraphicOptions) {
   ctx.save();
-  ctx.translate(x, y);
-  ctx.lineWidth = size * 0.105;
+  ctx.translate(options.x, options.y);
+  ctx.strokeStyle = options.color ?? INK;
+  ctx.lineWidth = options.size * 0.1;
   ctx.lineCap = "square";
-  line(ctx, [-size * 0.38, size * 0.38], [size * 0.38, -size * 0.38]);
+  const s = options.size;
+  line(ctx, [-s * 0.38, s * 0.38], [s * 0.38, -s * 0.38]);
   ctx.beginPath();
-  ctx.moveTo(-size * 0.2, -size * 0.38);
-  ctx.lineTo(size * 0.38, -size * 0.38);
-  ctx.lineTo(size * 0.38, size * 0.2);
+  ctx.moveTo(-s * 0.2, -s * 0.38);
+  ctx.lineTo(s * 0.38, -s * 0.38);
+  ctx.lineTo(s * 0.38, s * 0.2);
   ctx.stroke();
   ctx.restore();
 }
 
-function pill(ctx: CanvasRenderingContext2D, label: string, x: number, y: number) {
+function pill(ctx: CanvasRenderingContext2D, options: { label: string; x: number; y: number }) {
+  const { label, x, y } = options;
   ctx.save();
-  ctx.font = `500 21px ${MONO}`;
+  ctx.font = `500 21px ${BODY}`;
   const width = ctx.measureText(label).width + 65;
-  ctx.strokeStyle = "rgba(242,241,231,0.3)";
+  ctx.strokeStyle = "rgba(124,135,255,0.4)";
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.roundRect(x, y, width, 51, 26);
   ctx.stroke();
-  ctx.fillStyle = LIME;
+  ctx.fillStyle = ACCENT;
   ctx.beginPath();
   ctx.arc(x + 24, y + 25.5, 4.5, 0, TAU);
   ctx.fill();
-  text(ctx, { text: label, x: x + 40, y: y + 33, size: 21, weight: 500, font: MONO });
+  text(ctx, { text: label, x: x + 40, y: y + 33, size: 21, weight: 500, font: BODY });
   ctx.restore();
 }
 
 function grid(ctx: CanvasRenderingContext2D, light: boolean) {
-  ctx.strokeStyle = light ? "rgba(17,22,16,0.07)" : "rgba(209,255,117,0.035)";
+  ctx.strokeStyle = light ? "rgba(17,24,39,0.065)" : "rgba(124,135,255,0.045)";
   ctx.lineWidth = 1;
   for (let x = 80; x < FILM.width; x += 110) line(ctx, [x, 0], [x, FILM.height]);
   for (let y = 80; y < FILM.height; y += 110) line(ctx, [0, y], [FILM.width, y]);
 }
 
-function corners(ctx: CanvasRenderingContext2D, light: boolean) {
-  ctx.strokeStyle = light ? "rgba(17,22,16,0.4)" : "rgba(242,241,231,0.3)";
+function metadata(ctx: CanvasRenderingContext2D, chapter: Chapter) {
+  const light = chapter.background !== "dark";
+  const color = light ? INK : PAPER;
+  mark(ctx, { x: 122, y: 108, size: 30, color: light ? INK : ACCENT });
+  text(ctx, { text: "portrait", x: 151, y: 123, size: 43, weight: 600, tracking: -2, color });
+  ctx.save();
+  ctx.font = `600 43px ${DISPLAY}`;
+  ctx.letterSpacing = "-2px";
+  const dotX = 151 + ctx.measureText("portrait").width;
+  ctx.restore();
+  text(ctx, { text: ".", x: dotX, y: 123, size: 43, weight: 600, color: light ? INK : ACCENT });
+  ctx.save();
+  ctx.globalAlpha *= 0.7;
+  text(ctx, { text: `${String(chapter.index + 1).padStart(2, "0")} / ${String(FILM.chapters.length).padStart(2, "0")}`, x: 960, y: 121, size: 20, weight: 500, tracking: 3, color, align: "center", font: BODY });
+  text(ctx, { text: "PERSONAL SERVER", x: 1814, y: 121, size: 21, weight: 500, tracking: 3, color, align: "right", font: BODY });
+  text(ctx, { text: "FROM ARCHITECTURE TO DEPLOYMENT", x: 106, y: 975, size: 20, weight: 500, tracking: 3, color, font: BODY });
+  text(ctx, { text: "anthonypillot.fr", x: 1814, y: 975, size: 21, weight: 500, tracking: 2, color, align: "right", font: BODY });
+  ctx.strokeStyle = light ? "rgba(17,24,39,0.5)" : "rgba(240,242,255,0.35)";
   ctx.lineWidth = 1;
   for (const [x, y] of [[65, 65], [1855, 65], [65, 1015], [1855, 1015]]) {
     line(ctx, [x - 8, y], [x + 8, y]);
     line(ctx, [x, y - 8], [x, y + 8]);
   }
-}
-
-function globe(ctx: CanvasRenderingContext2D, time: number, light = false) {
-  const rotation = time * 0.28;
-  const tilt = -0.3;
-  const project = (lat: number, lng: number) => {
-    const x = Math.cos(lat) * Math.sin(lng + rotation);
-    const y = Math.sin(lat);
-    const z = Math.cos(lat) * Math.cos(lng + rotation);
-    return {
-      x: x * Math.cos(tilt) - y * Math.sin(tilt),
-      y: x * Math.sin(tilt) + y * Math.cos(tilt),
-      z,
-    };
-  };
-  ctx.save();
-  ctx.lineWidth = 0.004;
-  const drawCurve = (points: ReturnType<typeof project>[]) => {
-    for (let i = 1; i < points.length; i++) {
-      const a = points[i - 1];
-      const b = points[i];
-      const opacity = b.z > 0 ? 0.5 : 0.12;
-      ctx.strokeStyle = light ? `rgba(17,22,16,${opacity})` : `rgba(209,255,117,${opacity})`;
-      line(ctx, [a.x, a.y], [b.x, b.y]);
-    }
-  };
-  for (let lat = -Math.PI / 2 + 0.24; lat < Math.PI / 2; lat += 0.24) {
-    drawCurve(Array.from({ length: 81 }, (_, i) => project(lat, (i / 80) * TAU)));
-  }
-  for (let lng = 0; lng < TAU; lng += Math.PI / 10) {
-    drawCurve(Array.from({ length: 61 }, (_, i) => project(-Math.PI / 2 + (i / 60) * Math.PI, lng)));
-  }
-  ctx.strokeStyle = light ? "rgba(17,22,16,0.65)" : "rgba(209,255,117,0.65)";
-  ctx.lineWidth = 0.003;
-  ctx.beginPath();
-  ctx.arc(0, 0, 1, 0, TAU);
-  ctx.stroke();
-  const location = project(0.54, -0.8);
-  if (location.z > 0) {
-    ctx.fillStyle = light ? INK : LIME;
-    ctx.beginPath();
-    ctx.arc(location.x, location.y, 0.022, 0, TAU);
-    ctx.fill();
-    ctx.globalAlpha = 0.22 + Math.sin(time * 5) * 0.1;
-    ctx.beginPath();
-    ctx.arc(location.x, location.y, 0.065, 0, TAU);
-    ctx.fill();
-  }
   ctx.restore();
 }
 
-function metadata(ctx: CanvasRenderingContext2D, time: number, light: boolean, chapter: number) {
-  const color = light ? INK : PAPER;
-  ctx.globalAlpha = 0.7;
-  text(ctx, { text: "A MOTION PORTRAIT", x: 106, y: 121, size: 21, weight: 500, tracking: 3, color, font: MONO });
-  text(ctx, { text: `0${chapter} — 03`, x: 1814, y: 121, size: 21, weight: 500, tracking: 2, color, align: "right", font: MONO });
-  text(ctx, { text: "VISION. CODE. IMPACT.", x: 106, y: 975, size: 21, weight: 500, tracking: 3, color, font: MONO });
-  const frame = Math.floor(clamp(time, 0, FILM.duration - 1 / FILM.fps) * FILM.fps);
-  text(ctx, { text: `00:0${Math.floor(frame / FILM.fps)}:${String(frame % FILM.fps).padStart(2, "0")}`, x: 1814, y: 975, size: 21, weight: 500, tracking: 2, color, align: "right", font: MONO });
-  ctx.globalAlpha = 1;
+function orbit(ctx: CanvasRenderingContext2D, time: number) {
+  const phase = time / FILM.duration * TAU;
+  ctx.save();
+  ctx.translate(1450, 527);
+  ctx.rotate(-0.35 + Math.sin(phase) * 0.06);
+  ctx.strokeStyle = "rgba(124,135,255,0.3)";
+  ctx.lineWidth = 1.6;
+  for (const radius of [263, 336, 414]) {
+    ctx.beginPath();
+    ctx.ellipse(0, 0, radius, radius * 0.76, 0, 0, TAU);
+    ctx.stroke();
+  }
+  for (let i = 0; i < 3; i++) {
+    const angle = phase + i * TAU / 3 - 1.3;
+    const radius = [263, 336, 414][i];
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle) * radius * 0.76;
+    ctx.fillStyle = ACCENT;
+    ctx.beginPath();
+    ctx.arc(x, y, i === 2 ? 8 : 5, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(124,135,255,0.09)";
+    line(ctx, [x, y], [0, 0]);
+  }
+  ctx.restore();
+  mark(ctx, { x: 1450, y: 527, size: 133 });
 }
 
 function nameScene(ctx: CanvasRenderingContext2D, time: number) {
   ctx.fillStyle = INK;
   ctx.fillRect(0, 0, FILM.width, FILM.height);
-  const glow = ctx.createRadialGradient(1320, 500, 10, 1320, 500, 760);
-  glow.addColorStop(0, "rgba(133,171,58,0.1)");
-  glow.addColorStop(1, "rgba(17,22,16,0)");
+  const glow = ctx.createRadialGradient(1450, 520, 10, 1450, 520, 850);
+  glow.addColorStop(0, "rgba(124,135,255,0.11)");
+  glow.addColorStop(1, "rgba(17,24,39,0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, FILM.width, FILM.height);
   grid(ctx, false);
+  orbit(ctx, time);
 
-  // A slow-moving orbital system gives the typography a dimensional backdrop.
+  const label = ease((time + 0.45) / 1);
   ctx.save();
-  ctx.translate(1370, 520);
-  ctx.rotate(-0.35 + time * 0.035);
-  ctx.strokeStyle = "rgba(209,255,117,0.2)";
-  ctx.lineWidth = 1.5;
-  for (const radius of [275, 340, 420]) {
-    ctx.beginPath();
-    ctx.ellipse(0, 0, radius, radius * 0.76, 0, 0, TAU);
-    ctx.stroke();
-  }
-  const angle = time * 0.65 - 1.3;
-  ctx.fillStyle = LIME;
-  ctx.beginPath();
-  ctx.arc(Math.cos(angle) * 420, Math.sin(angle) * 420 * 0.76, 8, 0, TAU);
-  ctx.fill();
+  ctx.globalAlpha *= label;
+  text(ctx, { text: "HELLO, I’M", x: 120, y: 256 - (1 - label) * 25, size: 27, weight: 500, color: ACCENT, tracking: 5 });
   ctx.restore();
 
-  const reveal = ease((time + 0.08) / 1.1);
-  ctx.save();
-  ctx.globalAlpha = reveal;
-  text(ctx, { text: "MEET THE MIND.", x: 120, y: 350 - (1 - reveal) * 35, size: 29, weight: 500, color: LIME, tracking: 5 });
-  ctx.restore();
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(98, 362, 1740, 305);
-  ctx.clip();
-  ctx.globalAlpha = 0.14;
-  text(ctx, { text: "ANTHONY", x: 115 + (1 - reveal) * 40, y: 619 + (1 - reveal) * 220 + 19, size: 287, tracking: -16, outline: true });
-  ctx.globalAlpha = 1;
-  text(ctx, { text: "ANTHONY", x: 103, y: 603 + (1 - reveal) * 280, size: 287, tracking: -16 });
-  ctx.restore();
-
-  const subtitle = ease((time - 0.55) / 0.75);
-  ctx.save();
-  ctx.globalAlpha = subtitle;
-  text(ctx, { text: "Great technology starts with a great leader.", x: 121, y: 731 + (1 - subtitle) * 25, size: 34, weight: 400, font: MONO, color: "#b6baac" });
-  pill(ctx, "VISIONARY BY NATURE", 121, 793);
-  ctx.restore();
-
-  ctx.save();
-  ctx.translate(1712, 776);
-  ctx.rotate(time * 0.24);
-  ctx.fillStyle = LIME;
-  star(ctx, 0, 0, 50 * ease(time / 0.8));
-  ctx.restore();
-  corners(ctx, false);
-  metadata(ctx, time, false, 1);
-}
-
-function buildScene(ctx: CanvasRenderingContext2D, time: number) {
-  const local = time - 2.7;
-  ctx.fillStyle = LIME;
-  ctx.fillRect(0, 0, FILM.width, FILM.height);
-  grid(ctx, true);
-
-  ctx.save();
-  ctx.translate(1420, 527);
-  const scale = 306 * (0.85 + ease(local / 0.8) * 0.15);
-  ctx.scale(scale, scale);
-  globe(ctx, time, true);
-  ctx.restore();
-
-  ctx.save();
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.arc(1420, 527, 350, -0.4, 2.1);
-  ctx.stroke();
-  ctx.fillStyle = INK;
-  const angle = local * 0.7 - 0.4;
-  ctx.beginPath();
-  ctx.arc(1420 + Math.cos(angle) * 350, 527 + Math.sin(angle) * 350, 8, 0, TAU);
-  ctx.fill();
-  text(ctx, { text: "AHEAD OF THE CURVE.", x: 1420, y: 933, size: 20, weight: 500, tracking: 3, color: INK, align: "center" });
-  ctx.restore();
-
-  const lines = ["BUILDS", "WHAT’S", "NEXT."];
-  lines.forEach((value, index) => {
-    const reveal = ease((local - index * 0.12) / 0.7);
+  ["ANTHONY", "PILLOT."].forEach((value, index) => {
+    const reveal = ease((time + 0.4 - index * 0.16) / 1.05);
+    const y = 476 + index * 228;
     ctx.save();
     ctx.beginPath();
-    ctx.rect(109, 198 + index * 211, 1060, 225);
+    ctx.rect(98, y - 205, 1150, 242);
     ctx.clip();
-    text(ctx, { text: value, x: 112, y: 393 + index * 211 + (1 - reveal) * 220, size: 221, tracking: -11, color: INK });
+    ctx.save();
+    ctx.globalAlpha *= 0.16;
+    text(ctx, { text: value, x: 121, y: y + (1 - reveal) * 240 + 19, size: 236, tracking: -12, outline: true });
+    ctx.restore();
+    text(ctx, { text: value, x: 108, y: y + (1 - reveal) * 250, size: 236, tracking: -12 });
     ctx.restore();
   });
 
-  const detail = ease((local - 0.7) / 0.6);
+  const subtitle = ease((time - 0.12) / 0.95);
   ctx.save();
-  ctx.globalAlpha = detail;
-  ctx.strokeStyle = INK;
-  arrow(ctx, 848, 747, 105);
-  text(ctx, { text: "Turns bold ideas into real-world impact.", x: 123, y: 898 + (1 - detail) * 20, size: 29, weight: 400, font: MONO, color: INK });
+  ctx.globalAlpha *= subtitle;
+  text(ctx, { text: "Lead Full-Stack Engineer.", x: 121, y: 797 + (1 - subtitle) * 25, size: 34, weight: 400, font: BODY, color: "#acb7d1" });
+  pill(ctx, { label: "OPEN-SOURCE ADVOCATE", x: 121, y: 841 });
+  text(ctx, { text: "LILLE, FRANCE", x: 1450, y: 902, size: 20, weight: 500, tracking: 4, color: ACCENT, align: "center" });
   ctx.restore();
-  corners(ctx, true);
-  metadata(ctx, time, true, 2);
 }
 
-function leaderScene(ctx: CanvasRenderingContext2D, time: number) {
-  const local = time - 5.7;
+function pipeline(ctx: CanvasRenderingContext2D, local: number) {
+  const layers = [
+    { title: "FRONTEND", tools: "Vue · Nuxt · TypeScript" },
+    { title: "BACKEND", tools: "Node.js · PostgreSQL" },
+    { title: "INFRASTRUCTURE", tools: "Docker · Kubernetes" },
+  ];
+  const x = 1230;
+  const width = 540;
+  const height = 132;
+  const gap = 85;
+  ctx.save();
+  layers.forEach((layer, index) => {
+    const y = 250 + index * (height + gap);
+    const entry = ease((local - index * 0.14) / 1);
+    ctx.save();
+    ctx.globalAlpha *= entry;
+    ctx.translate((1 - entry) * 80, 0);
+    ctx.fillStyle = "rgba(17,24,39,0.05)";
+    ctx.strokeStyle = "rgba(17,24,39,0.35)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(x, y, width, height, 5);
+    ctx.fill();
+    ctx.stroke();
+    text(ctx, { text: `0${index + 1}`, x: x + 23, y: y + 39, size: 19, weight: 500, color: INK });
+    text(ctx, { text: layer.title, x: x + 76, y: y + 39, size: 19, weight: 500, tracking: 2, color: INK });
+    text(ctx, { text: layer.tools, x: x + 24, y: y + 94, size: 31, weight: 500, color: INK });
+    if (index < layers.length - 1) {
+      const center = x + width / 2;
+      ctx.strokeStyle = "rgba(17,24,39,0.3)";
+      line(ctx, [center, y + height], [center, y + height + gap]);
+      const progress = ((local / (FILM.beatDuration * 2) - index * 0.3) % 1 + 1) % 1;
+      ctx.fillStyle = INK;
+      ctx.fillRect(center - 4, y + height + progress * (gap - 8), 8, 8);
+    }
+    ctx.restore();
+  });
+  ctx.restore();
+}
+
+function buildScene(ctx: CanvasRenderingContext2D, _time: number, local: number) {
+  ctx.fillStyle = ACCENT;
+  ctx.fillRect(0, 0, FILM.width, FILM.height);
+  grid(ctx, true);
+  pipeline(ctx, local);
+
+  text(ctx, { text: "FULL STACK. FULL PICTURE.", x: 121, y: 224, size: 27, weight: 500, tracking: 3, color: INK });
+  const rows = [
+    { text: "ARCHITECT.", size: 173, y: 409 },
+    { text: "BUILD.", size: 218, y: 613 },
+    { text: "DEPLOY.", size: 218, y: 817 },
+  ];
+  rows.forEach((row, index) => {
+    const reveal = ease((local - index * 0.14) / 1);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(109, row.y - row.size, 1100, row.size + 30);
+    ctx.clip();
+    text(ctx, { ...row, x: 112, y: row.y + (1 - reveal) * (row.size + 30), tracking: -9, color: INK });
+    ctx.restore();
+  });
+  const detail = ease((local - 0.65) / 0.9);
+  ctx.save();
+  ctx.globalAlpha *= detail;
+  arrow(ctx, { x: 963, y: 553, size: 102 });
+  text(ctx, { text: "From idea to production.", x: 123, y: 907 + (1 - detail) * 20, size: 30, weight: 400, font: BODY, color: INK });
+  text(ctx, { text: "CONNECTED, END TO END.", x: 1500, y: 902, size: 20, weight: 500, tracking: 3, color: INK, align: "center" });
+  ctx.restore();
+}
+
+type HeadlineRow = Pick<TextOptions, "text" | "size" | "y" | "color" | "tracking">;
+
+function revealHeadline(ctx: CanvasRenderingContext2D, rows: HeadlineRow[], local: number) {
+  rows.forEach((row, index) => {
+    const reveal = ease((local - index * 0.14) / 1);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(109, row.y - row.size, 1100, row.size + 35);
+    ctx.clip();
+    text(ctx, { ...row, x: 112, y: row.y + (1 - reveal) * (row.size + 35), tracking: row.tracking ?? -8 });
+    ctx.restore();
+  });
+}
+
+function agentNetwork(ctx: CanvasRenderingContext2D, time: number, local: number) {
+  const labels = ["MCP", "TOOLS", "CONTEXT", "APIs"];
+  ctx.save();
+  ctx.translate(1450, 535);
+  ctx.strokeStyle = "rgba(124,135,255,0.14)";
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.arc(0, 0, 278, 0, TAU);
+  ctx.stroke();
+  labels.forEach((label, index) => {
+    const angle = -Math.PI / 2 + index * Math.PI / 2;
+    const x = Math.cos(angle) * 278;
+    const y = Math.sin(angle) * 278;
+    const bend = 28 * Math.sin(time * 0.5 + index);
+    const cx = x / 2 - Math.sin(angle) * bend;
+    const cy = y / 2 + Math.cos(angle) * bend;
+    ctx.save();
+    ctx.globalAlpha *= ease((local - index * 0.12) / 1.1);
+    ctx.strokeStyle = "rgba(124,135,255,0.45)";
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(cx, cy, x, y);
+    ctx.stroke();
+    const progress = ((local / (FILM.beatDuration * 2) + index / 4) % 1 + 1) % 1;
+    const px = 2 * (1 - progress) * progress * cx + progress * progress * x;
+    const py = 2 * (1 - progress) * progress * cy + progress * progress * y;
+    ctx.fillStyle = ACCENT;
+    ctx.beginPath();
+    ctx.arc(px, py, 5, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = INK;
+    ctx.beginPath();
+    ctx.roundRect(x - 79, y - 34, 158, 68, 10);
+    ctx.fill();
+    ctx.stroke();
+    text(ctx, { text: label, x, y: y + 8, size: 23, color: PAPER, weight: 500, align: "center", tracking: 1 });
+    ctx.restore();
+  });
+  ctx.save();
+  ctx.globalAlpha *= ease(local / 1);
+  ctx.fillStyle = INK;
+  ctx.strokeStyle = ACCENT;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, 103, 0, TAU);
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(124,135,255,0.15)";
+  ctx.beginPath();
+  ctx.arc(0, 0, 128 + Math.sin(local / (FILM.beatDuration * 2) * TAU) * 3, 0, TAU);
+  ctx.stroke();
+  mark(ctx, { x: 0, y: -23, size: 57 });
+  text(ctx, { text: "AGENT", x: 0, y: 53, size: 24, weight: 500, color: PAPER, tracking: 3, align: "center" });
+  ctx.restore();
+  ctx.restore();
+}
+
+function agentScene(ctx: CanvasRenderingContext2D, time: number, local: number) {
   ctx.fillStyle = INK;
   ctx.fillRect(0, 0, FILM.width, FILM.height);
   grid(ctx, false);
-
-  const reveal = ease(local / 0.85);
+  const glow = ctx.createRadialGradient(1450, 535, 20, 1450, 535, 420);
+  glow.addColorStop(0, "rgba(124,135,255,0.08)");
+  glow.addColorStop(1, "rgba(17,24,39,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(1030, 150, 890, 800);
+  agentNetwork(ctx, time, local);
+  text(ctx, { text: "INTELLIGENCE, CONNECTED.", x: 121, y: 224, size: 27, weight: 500, tracking: 3, color: ACCENT });
+  revealHeadline(ctx, [
+    { text: "AGENTS.", size: 218, y: 413, tracking: -10 },
+    { text: "TOOLS.", size: 218, y: 615, color: ACCENT, tracking: -10 },
+    { text: "CONNECTIONS.", size: 146, y: 817, color: ACCENT, tracking: -7 },
+  ], local);
   ctx.save();
-  ctx.translate(1515 + (1 - reveal) * 150, 527);
-  const scale = 286;
-  ctx.scale(scale, scale);
-  globe(ctx, time);
+  ctx.globalAlpha *= ease((local - 0.65) / 0.9);
+  text(ctx, { text: "Building agentic systems & MCP integrations.", x: 123, y: 907, size: 30, weight: 400, font: BODY, color: "#acb7d1" });
+  text(ctx, { text: "CONTEXT INTO ACTION.", x: 1450, y: 902, size: 20, weight: 500, tracking: 3, color: ACCENT, align: "center" });
   ctx.restore();
-
-  ctx.save();
-  ctx.strokeStyle = "rgba(209,255,117,0.18)";
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.ellipse(1515, 527, 386, 138, -0.44, 0, TAU);
-  ctx.stroke();
-  ctx.fillStyle = LIME;
-  star(ctx, 1780, 299, 24);
-  ctx.restore();
-
-  const lines = [
-    { text: "THE WORLD’S", y: 348, size: 92, color: PAPER, tracking: -3 },
-    { text: "BEST TECH", y: 543, size: 174, color: LIME, tracking: -9 },
-    { text: "LEADER.", y: 738, size: 174, color: LIME, tracking: -9 },
-  ];
-  lines.forEach((item, index) => {
-    const entry = ease((local - index * 0.12) / 0.7);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(110, item.y - item.size, 1155, item.size + 30);
-    ctx.clip();
-    text(ctx, { ...item, x: 117, y: item.y + (1 - entry) * (item.size + 35) });
-    ctx.restore();
-  });
-
-  ctx.save();
-  ctx.globalAlpha = ease((local - 0.72) / 0.65);
-  pill(ctx, "ANTHONY. IN A LEAGUE OF HIS OWN.", 123, 808);
-  text(ctx, { text: "GLOBAL IMPACT", x: 1515, y: 895, size: 20, tracking: 4, weight: 500, color: LIME, align: "center" });
-  ctx.restore();
-  corners(ctx, false);
-  metadata(ctx, time, false, 3);
-
-  // Hold the final accolade so the short film lands rather than disappearing.
-  ctx.strokeStyle = LIME;
-  ctx.lineWidth = 3;
-  line(ctx, [106, 1015], [106 + ease((local - 0.4) / 2.6) * 1708, 1015]);
 }
 
+type HumanParticle = { x: number; y: number; emphasis: boolean };
+
+function createHumanParticles(): HumanParticle[] {
+  const particles: HumanParticle[] = [];
+  for (const person of [
+    { x: -245, y: -90, radius: 44, width: 112, height: 114, emphasis: false },
+    { x: 245, y: -90, radius: 44, width: 112, height: 114, emphasis: false },
+    { x: 0, y: -145, radius: 64, width: 175, height: 170, emphasis: true },
+  ]) {
+    for (let i = 0; i < 32; i++) {
+      const angle = i / 32 * TAU;
+      particles.push({ x: person.x + Math.cos(angle) * person.radius, y: person.y + Math.sin(angle) * person.radius, emphasis: person.emphasis });
+    }
+    for (let i = 0; i <= 44; i++) {
+      const progress = i / 44;
+      particles.push({ x: person.x + (progress * 2 - 1) * person.width, y: 150 - Math.sin(progress * Math.PI) * person.height, emphasis: person.emphasis });
+    }
+    for (let i = 0; i <= 20; i++) {
+      particles.push({ x: person.x + (i / 20 * 2 - 1) * person.width, y: 185, emphasis: person.emphasis });
+    }
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 4; i++) {
+        particles.push({ x: person.x + side * person.width, y: 150 + i * 9, emphasis: person.emphasis });
+      }
+    }
+  }
+  return particles;
+}
+
+const HUMAN_PARTICLES = createHumanParticles();
+
+function humanScene(ctx: CanvasRenderingContext2D, time: number, local: number) {
+  ctx.fillStyle = PAPER;
+  ctx.fillRect(0, 0, FILM.width, FILM.height);
+  grid(ctx, true);
+  ctx.save();
+  ctx.translate(1450, 535);
+  ctx.strokeStyle = "rgba(124,135,255,0.15)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(0, 0, 340, 0, TAU);
+  ctx.stroke();
+  HUMAN_PARTICLES.forEach((particle, index) => {
+    const assembly = ease((local - index * 0.001) / 1.45);
+    const phase = time / FILM.duration * TAU;
+    const x = particle.x + Math.cos(index * 2.399) * 200 * (1 - assembly) + Math.sin(phase + index * 0.18) * 0.8;
+    const y = particle.y + Math.sin(index * 1.71) * 190 * (1 - assembly) + Math.cos(phase + index * 0.18) * 0.8;
+    ctx.fillStyle = particle.emphasis ? ACCENT : "rgba(17,24,39,0.26)";
+    ctx.beginPath();
+    ctx.arc(x, y, particle.emphasis ? 3.2 : 2.6, 0, TAU);
+    ctx.fill();
+  });
+  ctx.restore();
+  text(ctx, { text: "BEHIND THE CODE.", x: 121, y: 224, size: 27, weight: 500, tracking: 3, color: INK });
+  revealHeadline(ctx, [
+    { text: "ENGINEERING.", size: 151, y: 408, color: INK, tracking: -7 },
+    { text: "WITH A", size: 129, y: 590, color: INK, tracking: -6 },
+    { text: "HUMAN SIDE.", size: 164, y: 817, color: ACCENT, tracking: -8 },
+  ], local);
+  ctx.save();
+  ctx.globalAlpha *= ease((local - 0.7) / 0.95);
+  text(ctx, { text: "Software engineering meets work psychology.", x: 123, y: 907, size: 30, weight: 400, font: BODY, color: INK });
+  text(ctx, { text: "TECHNOLOGY × PEOPLE", x: 1450, y: 902, size: 20, weight: 500, tracking: 3, color: INK, align: "center" });
+  ctx.restore();
+}
+
+function contributionGraph(ctx: CanvasRenderingContext2D, local: number) {
+  const opening = ease((local - 0.1) / 1.2);
+  ctx.save();
+  ctx.translate(1450, 530);
+  ctx.globalAlpha *= opening;
+  ctx.scale(0.8 + opening * 0.2, 0.8 + opening * 0.2);
+  const spread = 200 + opening * 90;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 7;
+  ctx.lineJoin = "miter";
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(side * (spread - 85), -145);
+    ctx.lineTo(side * spread, 0);
+    ctx.lineTo(side * (spread - 85), 145);
+    ctx.stroke();
+  }
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = "rgba(17,24,39,0.7)";
+  line(ctx, [0, -202], [0, 202]);
+  ctx.beginPath();
+  ctx.moveTo(0, -80);
+  ctx.bezierCurveTo(0, 25, 155, -10, 155, 135);
+  ctx.stroke();
+  ctx.fillStyle = INK;
+  for (const [x, y] of [[0, -202], [0, 0], [0, 202], [155, 135]]) {
+    ctx.beginPath();
+    ctx.arc(x, y, 12, 0, TAU);
+    ctx.fill();
+  }
+  const progress = ((local / (FILM.beatDuration * 2)) % 1 + 1) % 1;
+  const inverse = 1 - progress;
+  const px = 3 * inverse * progress * progress * 155 + progress ** 3 * 155;
+  const py = inverse ** 3 * -80 + 3 * inverse ** 2 * progress * 25 + 3 * inverse * progress ** 2 * -10 + progress ** 3 * 135;
+  ctx.beginPath();
+  ctx.arc(px, py, 5, 0, TAU);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(0, -202 + progress * 404, 5, 0, TAU);
+  ctx.fill();
+  text(ctx, { text: "SOURCE", x: 0, y: -246, size: 19, weight: 500, tracking: 3, color: INK, align: "center" });
+  text(ctx, { text: "FOSS", x: 0, y: 256, size: 19, weight: 500, tracking: 3, color: INK, align: "center" });
+  text(ctx, { text: "CONTRIBUTE", x: 155, y: 187, size: 15, weight: 500, tracking: 1, color: INK, align: "center" });
+  ctx.restore();
+}
+
+function openScene(ctx: CanvasRenderingContext2D, _time: number, local: number) {
+  ctx.fillStyle = ACCENT;
+  ctx.fillRect(0, 0, FILM.width, FILM.height);
+  grid(ctx, true);
+  contributionGraph(ctx, local);
+  text(ctx, { text: "GOOD IDEAS GROW TOGETHER.", x: 121, y: 224, size: 27, weight: 500, tracking: 3, color: INK });
+  revealHeadline(ctx, [
+    { text: "BUILT IN", size: 178, y: 413, color: INK, tracking: -8 },
+    { text: "THE", size: 218, y: 615, color: INK, tracking: -10 },
+    { text: "OPEN.", size: 218, y: 817, color: INK, tracking: -10 },
+  ], local);
+  ctx.save();
+  ctx.globalAlpha *= ease((local - 0.65) / 0.9);
+  text(ctx, { text: "Open-source advocate.", x: 123, y: 907, size: 30, weight: 400, font: BODY, color: INK });
+  text(ctx, { text: "SHARE KNOWLEDGE. BUILD TOGETHER.", x: 1450, y: 902, size: 18, weight: 500, tracking: 2, color: INK, align: "center" });
+  ctx.restore();
+}
+
+function serverStack(ctx: CanvasRenderingContext2D, time: number) {
+  const phase = time / FILM.duration * TAU;
+  ctx.save();
+  ctx.translate(1450, 377 + Math.sin(phase) * 10);
+  ctx.strokeStyle = "rgba(124,135,255,0.15)";
+  ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  ctx.ellipse(0, 150, 388, 322, -0.3, 0, TAU);
+  ctx.stroke();
+  const labels = ["PROJECTS", "TOOLS", "ASSETS"];
+  labels.forEach((label, index) => {
+    ctx.save();
+    ctx.translate(0, index * 178);
+    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = "rgba(124,135,255,0.8)";
+    ctx.fillStyle = INK;
+    ctx.beginPath();
+    ctx.moveTo(-222, 0);
+    ctx.lineTo(0, -52);
+    ctx.lineTo(222, 0);
+    ctx.lineTo(222, 60);
+    ctx.lineTo(0, 112);
+    ctx.lineTo(-222, 60);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "rgba(124,135,255,0.08)";
+    ctx.beginPath();
+    ctx.moveTo(-222, 0);
+    ctx.lineTo(0, -52);
+    ctx.lineTo(222, 0);
+    ctx.lineTo(0, 52);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    line(ctx, [0, 52], [0, 112]);
+    ctx.save();
+    ctx.translate(-179, 33);
+    ctx.rotate(Math.atan2(52, 222));
+    text(ctx, { text: label, x: 0, y: 12, size: 21, weight: 500, tracking: 2 });
+    ctx.restore();
+    ctx.fillStyle = ACCENT;
+    const pulse = 0.65 + Math.sin(phase + index) * 0.2;
+    ctx.save();
+    ctx.globalAlpha *= pulse;
+    ctx.beginPath();
+    ctx.arc(169, 48, 4, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+    ctx.restore();
+  });
+  const x = Math.cos(phase - 0.4) * 388;
+  const y = 150 + Math.sin(phase - 0.4) * 322;
+  ctx.fillStyle = ACCENT;
+  ctx.beginPath();
+  ctx.arc(x, y, 7, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+
+function hostScene(ctx: CanvasRenderingContext2D, time: number, local: number) {
+  ctx.fillStyle = INK;
+  ctx.fillRect(0, 0, FILM.width, FILM.height);
+  grid(ctx, false);
+  ctx.save();
+  ctx.globalAlpha *= ease(local / 1.2);
+  serverStack(ctx, time);
+  ctx.restore();
+  text(ctx, { text: "A HOME FOR WHAT I CREATE.", x: 121, y: 224, size: 27, weight: 500, tracking: 3, color: ACCENT });
+  ["BUILD.", "HOST.", "SHARE."].forEach((value, index) => {
+    const reveal = ease((local - index * 0.14) / 1);
+    const y = 413 + index * 202;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(109, y - 218, 1100, 243);
+    ctx.clip();
+    text(ctx, { text: value, x: 112, y: y + (1 - reveal) * 248, size: 218, tracking: -10, color: index === 0 ? PAPER : ACCENT });
+    ctx.restore();
+  });
+  ctx.save();
+  ctx.globalAlpha *= ease((local - 0.7) / 0.9);
+  text(ctx, { text: "anthonypillot.fr · My personal server.", x: 123, y: 907, size: 30, weight: 400, font: BODY, color: "#acb7d1" });
+  text(ctx, { text: "OPEN SOURCE. SELF-HOSTED.", x: 1450, y: 902, size: 20, weight: 500, tracking: 3, color: ACCENT, align: "center" });
+  ctx.restore();
+}
+
+type SceneRenderer = (ctx: CanvasRenderingContext2D, time: number, local: number) => void;
+
+const SCENE_RENDERERS = {
+  introduction: nameScene,
+  engineering: buildScene,
+  agents: agentScene,
+  human: humanScene,
+  opensource: openScene,
+  hosting: hostScene,
+} satisfies Record<SceneId, SceneRenderer>;
+
+/** A periodic composition: the closing reveal continues into the opening frame. */
 export function renderFilm(ctx: CanvasRenderingContext2D, seconds: number) {
-  const time = clamp(seconds, 0, FILM.duration);
+  const time = ((seconds % FILM.duration) + FILM.duration) % FILM.duration;
+  const chapter = chapterAt(time);
   ctx.save();
   ctx.setTransform(ctx.canvas.width / FILM.width, 0, 0, ctx.canvas.height / FILM.height, 0, 0);
-  if (time < 2.7) nameScene(ctx, time);
-  else if (time < 5.7) buildScene(ctx, time);
-  else leaderScene(ctx, time);
+  SCENE_RENDERERS[chapter.id](ctx, time, time - chapter.start);
+  metadata(ctx, chapter);
 
-  // Two tightly timed directional wipes carry the eye into the next chapter.
-  for (const transition of [{ at: 2.7, color: LIME }, { at: 5.7, color: INK }]) {
-    const progress = (time - transition.at + 0.22) / 0.44;
+  for (const incoming of FILM.chapters.slice(1)) {
+    const progress = (time - incoming.start + FILM.transitionDuration / 2) / FILM.transitionDuration;
     if (progress > 0 && progress < 1) {
       const x = progress < 0.5
         ? FILM.width * (1 - smooth(progress * 2))
         : -FILM.width * smooth((progress - 0.5) * 2);
-      ctx.fillStyle = transition.color;
+      ctx.fillStyle = BACKGROUNDS[incoming.background];
       ctx.fillRect(x, 0, FILM.width, FILM.height);
     }
+  }
+
+  if (time >= FILM.duration - FILM.loopRevealDuration) {
+    ctx.save();
+    ctx.globalAlpha = smooth((time - FILM.duration + FILM.loopRevealDuration) / (FILM.loopRevealDuration - 0.1));
+    nameScene(ctx, time - FILM.duration);
+    metadata(ctx, FILM.chapters[0]);
+    ctx.restore();
   }
   ctx.restore();
 }

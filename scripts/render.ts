@@ -1,10 +1,10 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright-core";
 import { createServer } from "vite";
-import { FILM } from "../src/film";
+import { FILM } from "../src/timeline";
 import { browserExecutable } from "./browser";
 import { createSoundtrack } from "./soundtrack";
 
@@ -22,7 +22,7 @@ try {
   await page.goto("http://127.0.0.1:5178/?render", { waitUntil: "networkidle" });
   await page.waitForFunction(() => window.filmReady === true);
 
-  const poster = await page.evaluate(() => window.renderAt(1.8));
+  const poster = await page.evaluate((seconds) => window.renderAt(seconds), FILM.chapters[0].sample);
   await writeFile(path.join(output, "poster.jpg"), Buffer.from(poster.split(",")[1], "base64"));
 
   const encoder = spawn("ffmpeg", [
@@ -32,7 +32,7 @@ try {
     "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
     "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
     "-movflags", "+faststart", "-t", String(FILM.duration),
-    path.join(output, "anthony.mp4"),
+    path.join(output, ".movie-render.mp4"),
   ], { stdio: ["pipe", "ignore", "pipe"] });
 
   let encoderErrors = "";
@@ -54,7 +54,8 @@ try {
   }
   encoder.stdin.end();
   await completion;
-  console.log(`Film ready: public/anthony.mp4 — 9 seconds, 1080p, 30 fps, original soundtrack. Rendered in ${((performance.now() - startedAt) / 1000).toFixed(1)}s.`);
+  await rename(path.join(output, ".movie-render.mp4"), path.join(output, "movie.mp4"));
+  console.log(`portrait. film ready: public/movie.mp4 — ${FILM.duration}-second loop, ${FILM.chapters.length} scenes, 1080p, ${FILM.fps} fps, periodic soundtrack. Rendered in ${((performance.now() - startedAt) / 1000).toFixed(1)}s.`);
 } finally {
   await browser.close();
   await server.close();

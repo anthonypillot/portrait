@@ -6,18 +6,21 @@ import "@fontsource/dm-sans/400.css";
 import "@fontsource/dm-sans/500.css";
 import "@fontsource/dm-sans/600.css";
 import "./style.css";
-import { clamp, FILM, renderFilm } from "./film";
+import { clamp, renderFilm } from "./film";
+import { chapterAt, FILM, formatTime } from "./timeline";
 
 const icons = {
   arrow: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg>',
-  download: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M5 16v4h14v-4"/></svg>',
   play: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m9 5 11 7-11 7V5Z"/></svg>',
   pause: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 5h4v14H7zm6 0h4v14h-4z"/></svg>',
   replay: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/></svg>',
   muted: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m11 5-5 4H3v6h3l5 4V5ZM16 9l6 6m0-6-6 6"/></svg>',
   sound: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m11 5-5 4H3v6h3l5 4V5ZM15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/></svg>',
   expand: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg>',
-  check: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>',
+  loop: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4m14-3v4a3 3 0 0 1-3 3H3"/></svg>',
+  portfolio: '<svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="4" y="5" width="24" height="22" rx="3"/><path d="M4 12h24m-19-4h1m3 0h1M10 18l-3 3 3 3m12-6 3 3-3 3m-4-7-3 9"/></svg>',
+  github: '<svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M12 27c-6 2-6-3-8-3m16 6v-5a4 4 0 0 0-1-3c5-.5 10-2.5 10-9a7 7 0 0 0-2-5c.3-1.7 0-3.5-.5-5-2.5 0-4.5 1-6 2a19 19 0 0 0-9 0c-1.5-1-3.5-2-6-2A10 10 0 0 0 5 8a7 7 0 0 0-2 5c0 6.5 5 8.5 10 9a4 4 0 0 0-1 3v5"/></svg>',
+  linkedin: '<svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="4" y="4" width="24" height="24" rx="3"/><path d="M10 14v9m6 0v-9m0 4a4 4 0 0 1 8 0v5"/><circle cx="10" cy="9.5" r=".8" fill="currentColor"/></svg>',
 };
 
 function element<T extends HTMLElement>(selector: string, type: new () => T): T {
@@ -26,83 +29,6 @@ function element<T extends HTMLElement>(selector: string, type: new () => T): T 
   return result;
 }
 
-const app = element("#app", HTMLDivElement);
-const renderMode = new URLSearchParams(location.search).has("render");
-
-app.innerHTML = renderMode ? '<canvas id="film" width="1920" height="1080"></canvas>' : `
-  <div class="studio">
-    <header class="header">
-      <a class="brand" href="./" aria-label="Portrait Studio home">
-        <span class="brand-mark"><span></span><span></span><span></span></span>
-        <span>portrait<span class="brand-dot">.</span></span>
-        <span class="brand-descriptor">STORIES IN MOTION</span>
-      </a>
-      <div class="header-actions">
-        <span class="edition">INDEPENDENT SPIRIT. EXTRAORDINARY PEOPLE.</span>
-        <a class="download-button" href="/anthony.mp4" download="Anthony-A-Motion-Portrait.mp4">${icons.download}<span>Download film</span><span class="file-type">MP4</span></a>
-      </div>
-    </header>
-
-    <main>
-      <section class="intro" aria-labelledby="page-title">
-        <div>
-          <div class="eyebrow"><span class="small-cross">✳</span> THE LEADERSHIP SERIES <span class="eyebrow-divider">/</span> VOL. 001</div>
-          <h1 id="page-title">Big vision. <span>Lasting impact.</span></h1>
-        </div>
-        <div class="intro-description"><span class="mini-line"></span><p>Some leaders follow the future.<br>Anthony builds it.</p></div>
-      </section>
-
-      <section class="film-section" aria-label="Anthony motion-design film">
-        <div class="film-heading">
-          <div class="film-title"><span class="status-dot"></span><span>ANTHONY</span><span class="film-heading-divider">/</span><span class="muted-text">A MOTION PORTRAIT</span></div>
-          <div class="format-label">9 SECONDS <span>·</span> 1920 × 1080 <span>·</span> 30 FPS</div>
-        </div>
-        <div class="film-frame" id="film-frame">
-          <canvas id="film" width="1920" height="1080" role="img" aria-label="Animated film celebrating Anthony, the world's best tech leader"></canvas>
-          <button class="canvas-toggle" id="canvas-toggle" aria-label="Pause film"></button>
-          <div class="paused-overlay" id="paused-overlay"><span>${icons.play}</span></div>
-          <span class="screen-corner corner-top-left"></span><span class="screen-corner corner-top-right"></span>
-          <span class="screen-corner corner-bottom-left"></span><span class="screen-corner corner-bottom-right"></span>
-        </div>
-        <div class="transport">
-          <div class="transport-left">
-            <button class="play-button" id="play" aria-label="Pause film">${icons.pause}</button>
-            <button class="icon-button replay-button" id="replay" aria-label="Replay from beginning" title="Replay">${icons.replay}</button>
-            <span class="timecode"><span id="current-time">00:00</span><span class="time-divider">/</span>00:09</span>
-          </div>
-          <div class="seek-wrap"><input type="range" id="seek" min="0" max="9" step="0.01" value="0" aria-label="Film playback position"/><div class="seek-chapters"><span></span><span></span></div></div>
-          <div class="transport-right">
-            <button class="sound-button" id="sound" aria-label="Enable soundtrack" title="Sound on / off (M)">${icons.muted}<span>SOUND OFF</span></button>
-            <span class="control-divider"></span>
-            <button class="icon-button" id="fullscreen" aria-label="Enter fullscreen" title="Fullscreen">${icons.expand}</button>
-          </div>
-        </div>
-      </section>
-
-      <section class="story-section" aria-label="Film chapters">
-        <div class="story-heading"><span>ONE LEADER. THREE ACTS.</span><span class="story-hint">A small film. A big statement. ${icons.arrow}</span></div>
-        <div class="chapters">
-          ${FILM.chapters.map((chapter, index) => `
-            <button class="chapter ${index === 0 ? "active" : ""}" data-chapter="${index}" aria-label="Play chapter ${index + 1}: ${chapter.title}">
-              <div class="chapter-thumb"><canvas id="thumbnail-${index}" width="288" height="162" aria-hidden="true"></canvas><span class="thumb-play">${icons.play}</span></div>
-              <div class="chapter-copy"><span class="chapter-number">0${index + 1}<span class="chapter-duration">${index === 0 ? "00:00–00:03" : index === 1 ? "00:03–00:06" : "00:06–00:09"}</span></span><h2>${chapter.title}</h2><p>${chapter.subtitle}</p></div>
-              <span class="chapter-arrow">${icons.arrow}</span>
-            </button>
-          `).join("")}
-        </div>
-      </section>
-      <footer class="footer"><span>MADE OF VISION. DRIVEN BY PEOPLE.</span><span class="footer-right"><span class="lime-dot"></span> GOOD LEADERSHIP DESERVES A LITTLE MOTION.</span></footer>
-    </main>
-  </div>
-  <div class="toast" id="toast" role="status">${icons.check}<span>Your film is ready. Let it inspire.</span></div>
-  <audio id="soundtrack" src="/soundtrack.wav" preload="auto"></audio>
-`;
-
-const canvas = element("#film", HTMLCanvasElement);
-const ctx = canvas.getContext("2d");
-if (!ctx) throw new Error("Canvas rendering is unavailable.");
-const context = ctx;
-
 declare global {
   interface Window {
     filmReady: boolean;
@@ -110,164 +36,211 @@ declare global {
   }
 }
 
-await Promise.all([
-  document.fonts.load('700 100px "Space Grotesk"'),
-  document.fonts.load('500 21px "DM Sans"'),
-  document.fonts.load('400 34px "DM Sans"'),
-]);
-await document.fonts.ready;
-
-window.renderAt = (seconds: number) => {
-  renderFilm(context, seconds);
-  return canvas.toDataURL("image/jpeg", 0.96);
-};
-window.filmReady = true;
-renderFilm(context, renderMode ? 0 : 1.5);
+const app = element("#app", HTMLDivElement);
+const renderMode = new URLSearchParams(location.search).has("render");
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
 if (renderMode) {
+  app.innerHTML = '<canvas id="film" width="1920" height="1080"></canvas>';
   document.body.classList.add("render-mode");
+  await Promise.all([
+    document.fonts.load('700 100px "Space Grotesk"'),
+    document.fonts.load('600 46px "Space Grotesk"'),
+    document.fonts.load('500 21px "DM Sans"'),
+    document.fonts.load('400 34px "DM Sans"'),
+  ]);
+  await document.fonts.ready;
+  const canvas = element("#film", HTMLCanvasElement);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas rendering is unavailable.");
+  const context = ctx;
+  window.renderAt = (seconds: number) => {
+    renderFilm(context, seconds);
+    return canvas.toDataURL("image/jpeg", 0.96);
+  };
+  renderFilm(context, 0);
+  window.filmReady = true;
 } else {
-  initStudio();
+  app.innerHTML = `
+    <div class="studio">
+      <header class="header">
+        <a class="brand" href="/" aria-label="portrait. home">
+          <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+          <span>portrait<span class="brand-dot">.</span></span>
+          <span class="brand-descriptor">PERSONAL SERVER</span>
+        </a>
+        <nav class="header-links" aria-label="Main navigation">
+          <a href="https://anthonypillot.com" target="_blank" rel="noopener noreferrer">Portfolio ${icons.arrow}</a>
+          <a href="https://github.com/anthonypillot" target="_blank" rel="noopener noreferrer">GitHub ${icons.arrow}</a>
+          <a href="https://linkedin.com/in/anthony-pillot" target="_blank" rel="noopener noreferrer">LinkedIn ${icons.arrow}</a>
+        </nav>
+      </header>
+
+      <main>
+        <section class="intro" aria-labelledby="page-title">
+          <div>
+            <div class="eyebrow"><span class="small-cross" aria-hidden="true">✳</span> ANTHONY PILLOT <span class="eyebrow-divider">/</span> LILLE, FRANCE</div>
+            <h1 id="page-title">My corner of <span>the internet.</span></h1>
+          </div>
+          <div class="intro-description"><span class="mini-line" aria-hidden="true"></span><p><strong>Lead full-stack engineer. Open-source advocate.</strong><br>A personal server for the things I build, host, and share.</p></div>
+        </section>
+
+        <section class="film-section" id="film-section" aria-label="Anthony Pillot motion portrait">
+          <div class="film-heading">
+            <div class="film-title"><span class="accent-dot" aria-hidden="true"></span><span>ANTHONY PILLOT</span><span class="film-heading-divider">/</span><span class="muted-text">A PERSONAL INTRODUCTION</span></div>
+            <div class="format-label">${FILM.duration} SECONDS <span>·</span> ${FILM.chapters.length} SCENES</div>
+          </div>
+          <div class="film-frame">
+            <video id="film" width="1920" height="1080" src="/movie.mp4" poster="/poster.jpg" ${reducedMotion.matches ? "" : "autoplay"} loop muted playsinline preload="auto" aria-label="A ${FILM.duration}-second introduction to Anthony Pillot in ${FILM.chapters.length} scenes" aria-describedby="film-description">Your browser does not support video playback.</video>
+            <button class="film-toggle" id="film-toggle" aria-label="Play film"></button>
+            <div class="paused-overlay" id="paused-overlay" aria-hidden="true"><span>${icons.play}</span></div>
+            <span class="screen-corner corner-top-left"></span><span class="screen-corner corner-top-right"></span>
+            <span class="screen-corner corner-bottom-left"></span><span class="screen-corner corner-bottom-right"></span>
+          </div>
+          <p id="film-description" class="visually-hidden">${FILM.chapters.map((chapter) => `${chapter.headline} ${chapter.subtitle}`).join(" ")}</p>
+          <div class="transport">
+            <div class="transport-left">
+              <button class="play-button" id="play" aria-label="Play film">${icons.play}</button>
+              <button class="icon-button replay-button" id="replay" aria-label="Restart film" title="Restart">${icons.replay}</button>
+              <span class="timecode"><span id="current-time">00:00</span><span class="time-divider">/</span><span id="total-time">${formatTime(FILM.duration)}</span></span>
+            </div>
+            <div class="seek-wrap"><input type="range" id="seek" min="0" max="${FILM.duration}" step="0.01" value="0" aria-label="Film playback position"/><div class="seek-chapters" aria-hidden="true">${FILM.chapters.slice(1).map((chapter) => `<span style="left:${chapter.start / FILM.duration * 100}%" title="${chapter.title}"></span>`).join("")}</div></div>
+            <div class="transport-right">
+              <span class="loop-label" title="Film loops automatically">${icons.loop}<span>ON REPEAT</span></span>
+              <span class="control-divider"></span>
+              <button class="sound-button" id="sound" aria-label="Enable soundtrack" aria-pressed="false" title="Sound on / off (M)">${icons.muted}<span>SOUND OFF</span></button>
+              <button class="icon-button" id="fullscreen" aria-label="Enter fullscreen" title="Fullscreen">${icons.expand}</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="links-section" aria-labelledby="links-title">
+          <div class="links-heading"><h2 id="links-title">A LITTLE MORE ABOUT ME.</h2><span class="links-hint">Beyond this server ${icons.arrow}</span></div>
+          <div class="link-cards">
+            <a class="link-card" href="https://anthonypillot.com" target="_blank" rel="noopener noreferrer">
+              <span class="link-icon">${icons.portfolio}</span><div class="link-copy"><span class="link-label">01 <span>ANTHONYPILLOT.COM</span></span><h3>The full story</h3><p>My work, tools, and engineering journey.</p></div><span class="card-arrow">${icons.arrow}</span>
+            </a>
+            <a class="link-card" href="https://github.com/anthonypillot" target="_blank" rel="noopener noreferrer">
+              <span class="link-icon">${icons.github}</span><div class="link-copy"><span class="link-label">02 <span>GITHUB</span></span><h3>Built in the open</h3><p>Projects, code, and open-source contributions.</p></div><span class="card-arrow">${icons.arrow}</span>
+            </a>
+            <a class="link-card" href="https://linkedin.com/in/anthony-pillot" target="_blank" rel="noopener noreferrer">
+              <span class="link-icon">${icons.linkedin}</span><div class="link-copy"><span class="link-label">03 <span>LINKEDIN</span></span><h3>Let’s connect</h3><p>Good engineering starts with good people.</p></div><span class="card-arrow">${icons.arrow}</span>
+            </a>
+          </div>
+        </section>
+        <footer class="footer"><span>BUILT, HOSTED & MAINTAINED BY ANTHONY PILLOT.</span><span class="footer-right"><span class="accent-dot" aria-hidden="true"></span> ANTHONYPILLOT.FR <span class="footer-divider">/</span> PERSONAL SERVER</span></footer>
+      </main>
+    </div>
+    <div class="toast" id="toast" role="status"></div>
+  `;
+  initLanding();
 }
 
-function initStudio() {
+function initLanding() {
+  const video = element("#film", HTMLVideoElement);
   const playButton = element("#play", HTMLButtonElement);
-  const canvasToggle = element("#canvas-toggle", HTMLButtonElement);
-  const replayButton = element("#replay", HTMLButtonElement);
+  const filmToggle = element("#film-toggle", HTMLButtonElement);
   const soundButton = element("#sound", HTMLButtonElement);
   const fullscreenButton = element("#fullscreen", HTMLButtonElement);
-  const filmFrame = element("#film-frame", HTMLDivElement);
+  const filmSection = element("#film-section", HTMLElement);
   const overlay = element("#paused-overlay", HTMLDivElement);
   const seek = element("#seek", HTMLInputElement);
   const currentTime = element("#current-time", HTMLSpanElement);
-  const audio = element("#soundtrack", HTMLAudioElement);
   const toast = element("#toast", HTMLDivElement);
-  const chapters = [...document.querySelectorAll<HTMLButtonElement>(".chapter")];
-  const prefersReducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let playing = !prefersReducedMotion;
-  let position = prefersReducedMotion ? 1.5 : 0;
-  let startedAt = performance.now();
-  let sound = false;
-  let animation = 0;
   let toastTimer = 0;
-
-  FILM.chapters.forEach((chapter, index) => {
-    const thumbnail = element(`#thumbnail-${index}`, HTMLCanvasElement);
-    const thumbnailContext = thumbnail.getContext("2d");
-    if (thumbnailContext) renderFilm(thumbnailContext, chapter.sample);
-  });
+  let resumeWhenVisible = false;
+  video.muted = true;
 
   function showToast(message: string) {
-    const label = toast.querySelector("span");
-    if (label) label.textContent = message;
+    toast.textContent = message;
     toast.classList.add("visible");
     window.clearTimeout(toastTimer);
     toastTimer = window.setTimeout(() => toast.classList.remove("visible"), 3500);
   }
 
-  function updateControls() {
-    playButton.innerHTML = playing ? icons.pause : position >= FILM.duration ? icons.replay : icons.play;
-    playButton.setAttribute("aria-label", playing ? "Pause film" : position >= FILM.duration ? "Replay film" : "Play film");
-    canvasToggle.setAttribute("aria-label", playing ? "Pause film" : "Play film");
-    overlay.classList.toggle("visible", !playing);
-    overlay.innerHTML = `<span>${position >= FILM.duration ? icons.replay : icons.play}</span>`;
-    currentTime.textContent = `00:${String(Math.floor(position)).padStart(2, "0")}`;
-    seek.value = String(position);
-    seek.style.setProperty("--progress", `${(position / FILM.duration) * 100}%`);
-    seek.setAttribute("aria-valuetext", `${position.toFixed(1)} of 9 seconds`);
-    const chapter = position < 2.7 ? 0 : position < 5.7 ? 1 : 2;
-    chapters.forEach((button, index) => {
-      button.classList.toggle("active", index === chapter);
-      button.setAttribute("aria-pressed", String(index === chapter));
-    });
+  function updatePosition() {
+    const seconds = clamp(video.currentTime, 0, FILM.duration);
+    currentTime.textContent = formatTime(seconds);
+    seek.value = String(seconds);
+    seek.style.setProperty("--progress", `${seconds / FILM.duration * 100}%`);
+    const chapter = chapterAt(seconds);
+    seek.setAttribute("aria-valuetext", `${seconds.toFixed(1)} of ${FILM.duration} seconds. Scene ${chapter.index + 1} of ${FILM.chapters.length}: ${chapter.title}.`);
   }
 
-  async function syncAudio() {
-    if (!sound || !playing) {
-      audio.pause();
-      return;
-    }
-    audio.currentTime = Math.min(position, FILM.duration - 0.01);
-    try {
-      await audio.play();
-    } catch {
-      sound = false;
-      updateSound();
-      showToast("Soundtrack unavailable. The film is still ready to play.");
-    }
+  function updatePlayback() {
+    const playing = !video.paused;
+    playButton.innerHTML = playing ? icons.pause : icons.play;
+    const label = playing ? "Pause film" : "Play film";
+    playButton.setAttribute("aria-label", label);
+    filmToggle.setAttribute("aria-label", label);
+    overlay.classList.toggle("visible", !playing);
+    updatePosition();
   }
 
   function updateSound() {
+    const sound = !video.muted;
     soundButton.innerHTML = `${sound ? icons.sound : icons.muted}<span>SOUND ${sound ? "ON" : "OFF"}</span>`;
     soundButton.classList.toggle("enabled", sound);
     soundButton.setAttribute("aria-label", sound ? "Mute soundtrack" : "Enable soundtrack");
+    soundButton.setAttribute("aria-pressed", String(sound));
   }
 
-  function draw(now: number) {
-    if (playing) {
-      position = Math.min((now - startedAt) / 1000, FILM.duration);
-      if (position >= FILM.duration) {
-        playing = false;
-        audio.pause();
-      }
+  async function playFilm() {
+    try {
+      await video.play();
+    } catch {
+      updatePlayback();
     }
-    renderFilm(context, position);
-    updateControls();
-    if (playing) animation = requestAnimationFrame(draw);
-  }
-
-  function resumeFrom(seconds: number) {
-    cancelAnimationFrame(animation);
-    position = clamp(seconds, 0, FILM.duration);
-    startedAt = performance.now() - position * 1000;
-    renderFilm(context, position);
-    updateControls();
-    void syncAudio();
-    if (playing) animation = requestAnimationFrame(draw);
   }
 
   function togglePlayback() {
-    playing = !playing;
-    resumeFrom(position >= FILM.duration ? 0 : position);
+    if (video.paused) void playFilm();
+    else video.pause();
   }
 
-  playButton.addEventListener("click", togglePlayback);
-  canvasToggle.addEventListener("click", togglePlayback);
-  replayButton.addEventListener("click", () => {
-    playing = true;
-    resumeFrom(0);
+  video.addEventListener("loadedmetadata", () => {
+    if (reducedMotion.matches) video.currentTime = FILM.chapters[0].sample;
   });
-  seek.addEventListener("input", () => resumeFrom(Number(seek.value)));
+  video.addEventListener("loadeddata", () => {
+    window.filmReady = true;
+    updatePlayback();
+  });
+  video.addEventListener("play", updatePlayback);
+  video.addEventListener("pause", updatePlayback);
+  video.addEventListener("timeupdate", updatePosition);
+  video.addEventListener("seeked", updatePosition);
+  video.addEventListener("volumechange", updateSound);
+  video.addEventListener("error", () => showToast("The film couldn’t load. Please refresh to try again."));
+  playButton.addEventListener("click", togglePlayback);
+  filmToggle.addEventListener("click", togglePlayback);
+  element("#replay", HTMLButtonElement).addEventListener("click", () => {
+    video.currentTime = 0;
+    void playFilm();
+  });
+  seek.addEventListener("input", () => {
+    video.currentTime = clamp(Number(seek.value), 0, FILM.duration - 1 / FILM.fps);
+    updatePosition();
+  });
   soundButton.addEventListener("click", () => {
-    sound = !sound;
+    video.muted = !video.muted;
     updateSound();
-    if (sound && !playing) {
-      playing = true;
-      resumeFrom(position >= FILM.duration ? 0 : position);
-    } else {
-      void syncAudio();
-    }
+    if (!video.muted && video.paused) void playFilm();
   });
 
   fullscreenButton.addEventListener("click", async () => {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
-      else await filmFrame.requestFullscreen();
+      else await filmSection.requestFullscreen();
     } catch {
-      showToast("Fullscreen isn't available in this browser.");
+      showToast("Fullscreen isn’t available in this browser.");
     }
   });
   document.addEventListener("fullscreenchange", () => {
     fullscreenButton.setAttribute("aria-label", document.fullscreenElement ? "Exit fullscreen" : "Enter fullscreen");
   });
 
-  chapters.forEach((button, index) => button.addEventListener("click", () => {
-    playing = true;
-    resumeFrom(FILM.chapters[index].start);
-  }));
-
   document.addEventListener("keydown", (event) => {
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLButtonElement || event.target instanceof HTMLAnchorElement) return;
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLButtonElement || event.target instanceof HTMLAnchorElement || event.ctrlKey || event.metaKey || event.altKey) return;
     if (event.code === "Space") {
       event.preventDefault();
       togglePlayback();
@@ -275,19 +248,23 @@ function initStudio() {
       soundButton.click();
     } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
       event.preventDefault();
-      resumeFrom(position + (event.key === "ArrowLeft" ? -1 : 1));
+      video.currentTime = clamp(video.currentTime + (event.key === "ArrowLeft" ? -1 : 1), 0, FILM.duration - 1 / FILM.fps);
     }
   });
 
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden && playing) {
-      playing = false;
-      cancelAnimationFrame(animation);
-      audio.pause();
-      updateControls();
+    if (document.hidden) {
+      resumeWhenVisible = !video.paused;
+      video.pause();
+    } else if (resumeWhenVisible) {
+      resumeWhenVisible = false;
+      void playFilm();
     }
   });
-  element(".download-button", HTMLAnchorElement).addEventListener("click", () => showToast("Your film is ready. Let it inspire."));
-  updateControls();
-  if (playing) animation = requestAnimationFrame(draw);
+  reducedMotion.addEventListener("change", (event) => {
+    if (event.matches) video.pause();
+  });
+  updatePlayback();
+  updateSound();
+  if (!reducedMotion.matches) void playFilm();
 }

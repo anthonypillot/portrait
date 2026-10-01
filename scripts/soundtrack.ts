@@ -1,6 +1,7 @@
-import { FILM, clamp } from "../src/film";
+import { clamp } from "../src/film";
+import { FILM } from "../src/timeline";
 
-/** Original electronic score, synthesized deterministically without external assets. */
+/** Original periodic electronic score, synthesized without external assets. */
 export function createSoundtrack(): Buffer {
   const sampleRate = 48_000;
   const sampleCount = sampleRate * FILM.duration;
@@ -21,7 +22,12 @@ export function createSoundtrack(): Buffer {
   wav.writeUInt32LE(dataSize, 40);
 
   const tau = Math.PI * 2;
-  const notes = [220, 329.63, 440, 587.33, 659.26, 440, 329.63, 587.33];
+  const loopFrequency = (frequency: number) => Math.round(frequency * FILM.duration) / FILM.duration;
+  const notes = [220, 329.63, 440, 587.33, 659.26, 440].map(loopFrequency);
+  const chord = [110, 164.815, 220, 293.665].map(loopFrequency);
+  const halfBeat = FILM.beatDuration / 2;
+  const transitions = FILM.chapters.slice(1).map((chapter) => chapter.start);
+  const humanChapter = FILM.chapters.find((chapter) => chapter.id === "human");
   let seed = 123456;
   let filteredNoise = 0;
 
@@ -31,32 +37,35 @@ export function createSoundtrack(): Buffer {
     const noise = (seed / 4294967295) * 2 - 1;
     filteredNoise = filteredNoise * 0.94 + noise * 0.06;
 
-    // Soft, spacious chord bed.
-    const padEnvelope = Math.min(1, t * 1.5) * clamp((9 - t) / 1.2);
+    // Integer cycle counts and periodic modulation join the pad at the loop seam.
+    const phase = t / FILM.duration * tau;
     let pad = 0;
-    for (const frequency of [110, 164.815, 220, 293.665]) {
-      pad += Math.sin(tau * frequency * t + Math.sin(t * 0.6) * 0.1) * 0.017;
+    for (const frequency of chord) {
+      pad += Math.sin(tau * frequency * t + Math.sin(phase) * 0.1) * 0.017;
     }
-    pad *= padEnvelope;
 
-    // A light arpeggio with warm harmonics, rising into each typography reveal.
-    const noteIndex = Math.floor(t / 0.3);
-    const noteTime = t - noteIndex * 0.3;
+    // 96 BPM: eight beats per scene, with a softer passage for the human-side act.
+    const humanBlend = humanChapter
+      ? Math.min(clamp((t - humanChapter.start) / FILM.beatDuration), clamp((humanChapter.end - t) / FILM.beatDuration))
+      : 0;
+    const noteIndex = Math.floor(t / halfBeat);
+    const noteTime = t - noteIndex * halfBeat;
     const frequency = notes[noteIndex % notes.length];
-    const arpEnvelope = Math.min(1, noteTime / 0.009) * Math.exp(-noteTime * 11);
+    const arpEnvelope = Math.min(1, noteTime / 0.009) * Math.pow(clamp(1 - noteTime / halfBeat), 3) * (1 - humanBlend * 0.3);
     const arp = (
       Math.sin(tau * frequency * noteTime) * 0.062 +
       Math.sin(tau * frequency * 2 * noteTime) * 0.014
     ) * arpEnvelope;
 
-    const beatTime = t % 0.6;
-    const kick = Math.sin(tau * (50 * beatTime + 2.3 * (1 - Math.exp(-beatTime * 30)))) * Math.exp(-beatTime * 24) * 0.15;
-    const hatTime = t % 0.3;
-    const hat = (noise - filteredNoise) * Math.exp(-hatTime * 100) * 0.023;
+    const beatTime = t % FILM.beatDuration;
+    const kick = Math.sin(tau * (50 * beatTime + 2.3 * (1 - Math.exp(-beatTime * 30)))) * Math.exp(-beatTime * 24) * 0.15 * (1 - humanBlend * 0.45);
+    const hatTime = t % halfBeat;
+    const hatEnvelope = Math.min(1, hatTime / 0.002) * Math.pow(clamp(1 - hatTime / 0.09), 3);
+    const hat = (noise - filteredNoise) * hatEnvelope * 0.023 * (1 - humanBlend * 0.4);
 
     let sweep = 0;
     let impact = 0;
-    for (const transition of [2.7, 5.7]) {
+    for (const transition of transitions) {
       const before = t - (transition - 0.42);
       if (before > 0 && before < 0.42) {
         const strength = Math.pow(before / 0.42, 2);
@@ -69,7 +78,7 @@ export function createSoundtrack(): Buffer {
       }
     }
 
-    const master = Math.min(1, t / 0.025) * clamp((9 - t) / 0.55);
+    const master = 0.88 + Math.cos(phase) * 0.06;
     const left = Math.tanh((pad + arp * 0.94 + kick + hat + sweep + impact) * 1.4) * master * 0.83;
     const right = Math.tanh((pad + arp * 1.06 + kick + hat * 0.8 + sweep * 0.9 + impact) * 1.4) * master * 0.83;
     wav.writeInt16LE(Math.round(clamp(left, -1, 1) * 32767), 44 + i * 4);
