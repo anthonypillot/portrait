@@ -1,0 +1,24 @@
+{
+  "name": "anthony-motion-portrait",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 9393",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 9393",
+    "render": "tsx scripts/render.ts",
+    "verify": "tsx scripts/verify.ts"
+  },
+  "dependencies": {
+    "@fontsource/dm-sans": "^5.2.8",
+    "@fontsource/space-grotesk": "^5.2.10"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "playwright-core": "^1.63.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.0"
+  }
+}
